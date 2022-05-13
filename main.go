@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -97,26 +98,33 @@ func (p *proxy) Run() error {
 			}
 			buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
 
-			batch, err := reader.Read()
-			if err != nil {
-				return err
-			}
-
-			nrows := int(batch.NumRows())
-			bcols := batch.Columns()
-			for r := 0; r < nrows; r++ {
-				var cols [][]byte
-				for c := range fields {
-					b, err := render(bcols[c], r)
-					if err != nil {
-						return err
-					}
-					cols = append(cols, []byte(b))
+			totalRows := 0
+			for {
+				batch, err := reader.Read()
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					return err
 				}
-				buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
+
+				nrows := int(batch.NumRows())
+				totalRows += nrows
+
+				bcols := batch.Columns()
+				for r := 0; r < nrows; r++ {
+					var cols [][]byte
+					for c := range fields {
+						b, err := render(bcols[c], r)
+						if err != nil {
+							return err
+						}
+						cols = append(cols, []byte(b))
+					}
+					buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
+				}
 			}
 
-			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", nrows))}).Encode(buf)
+			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
 			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 			reader.Release()
 			_, err = p.conn.Write(buf)
