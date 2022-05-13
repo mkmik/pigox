@@ -33,6 +33,7 @@ type proxy struct {
 	ioxAddress string
 	backend    *pgproto3.Backend
 	conn       net.Conn
+	token      string
 }
 
 func newProxy(conn net.Conn, ioxAddress string) proxy {
@@ -174,7 +175,21 @@ func (p *proxy) handleStartup() (*session, error) {
 
 	switch startupMessage := startupMessage.(type) {
 	case *pgproto3.StartupMessage:
-		buf := (&pgproto3.AuthenticationOk{}).Encode(nil)
+		buf := (&pgproto3.AuthenticationCleartextPassword{}).Encode(nil)
+		_, err = p.conn.Write(buf)
+		if err != nil {
+			return nil, fmt.Errorf("error sending request for password: %w", err)
+		}
+		authMessage, err := p.backend.Receive()
+		if err != nil {
+			return nil, fmt.Errorf("error sending request for password: %w", err)
+		}
+		if password, ok := authMessage.(*pgproto3.PasswordMessage); !ok {
+			return nil, fmt.Errorf("unexpected message %T", authMessage)
+		} else {
+			p.token = password.Password
+		}
+		buf = (&pgproto3.AuthenticationOk{}).Encode(nil)
 		buf = (&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"}).Encode(buf)
 		buf = (&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"}).Encode(buf)
 		buf = (&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"}).Encode(buf)
@@ -183,6 +198,7 @@ func (p *proxy) handleStartup() (*session, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error sending ready for query: %w", err)
 		}
+		log.Printf("parameters %#v", startupMessage.Parameters)
 		return &session{
 			databaseName: startupMessage.Parameters["database"],
 			userName:     startupMessage.Parameters["user"],
