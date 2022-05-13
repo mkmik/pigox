@@ -28,13 +28,14 @@ type CLI struct {
 type session struct {
 	databaseName string
 	userName     string
+	token        string
 }
 
 type proxy struct {
 	ioxAddress string
 	backend    *pgproto3.Backend
 	conn       net.Conn
-	token      string
+	client     *influxdbiox.Client
 }
 
 func newProxy(conn net.Conn, ioxAddress string) proxy {
@@ -47,6 +48,19 @@ func newProxy(conn net.Conn, ioxAddress string) proxy {
 	}
 }
 
+func (p *proxy) testConnection(ctx context.Context, session *session) error {
+	q, err := p.client.PrepareQuery(ctx, session.databaseName, "select 1")
+	if err != nil {
+		return err
+	}
+	reader, err := q.Query(ctx)
+	if err != nil {
+		return err
+	}
+	defer reader.Release()
+	return nil
+}
+
 func (p *proxy) Run() error {
 	defer p.Close()
 
@@ -54,10 +68,36 @@ func (p *proxy) Run() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("session %#v", session)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	p.client, err = influxdbiox.NewClient(ctx, &influxdbiox.ClientConfig{
+		Address:  p.ioxAddress,
+		Database: session.databaseName,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := p.testConnection(ctx, session); err != nil {
+		log.Printf("cannot connect downstream: %v", err)
+		buf := (&pgproto3.ErrorResponse{
+			Severity:            "FATAL",
+			SeverityUnlocalized: "FATAL",
+			Code:                "XX000", // "internal_error"
+
+			Message: err.Error(),
+		}).Encode(nil)
+		if _, err = p.conn.Write(buf); err != nil {
+			return fmt.Errorf("error writing query response: %w", err)
+		}
+		return err
+	}
+	buf := (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(nil)
+	if _, err := p.conn.Write(buf); err != nil {
+		err = fmt.Errorf("error writing query response: %w", err)
+	}
 
 	for {
 		msg, err := p.backend.Receive()
@@ -70,29 +110,20 @@ func (p *proxy) Run() error {
 			query := msg.String
 			log.Println("Got query", query)
 
-			var buf []byte
 			if q := strings.TrimSpace(query); q == "" || q == ";" {
 				log.Printf("Return empty query response")
-				buf = (&pgproto3.EmptyQueryResponse{}).Encode(buf)
+				buf := (&pgproto3.EmptyQueryResponse{}).Encode(nil)
+				if _, err := p.conn.Write(buf); err != nil {
+					return fmt.Errorf("error writing query response: %w", err)
+				}
 			} else {
-				totalRows, err := p.processQuery(ctx, query, session)
-				if err == nil {
-					buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
-				} else {
-					buf = (&pgproto3.ErrorResponse{
-						Severity:            "ERROR",
-						SeverityUnlocalized: "ERROR",
-						Code:                "XX000", // "internal_error"
-
-						Message: err.Error(),
-					}).Encode(buf)
+				if _, err := p.processQuery(ctx, query, session); err != nil {
+					log.Println(err)
 				}
 			}
-
-			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
-			_, err = p.conn.Write(buf)
-			if err != nil {
-				return fmt.Errorf("error writing query response: %w", err)
+			buf := (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(nil)
+			if _, err := p.conn.Write(buf); err != nil {
+				err = fmt.Errorf("error writing query response: %w", err)
 			}
 		case *pgproto3.Terminate:
 			log.Println("got terminate message")
@@ -103,16 +134,26 @@ func (p *proxy) Run() error {
 	}
 }
 
-func (p *proxy) processQuery(ctx context.Context, query string, session *session) (int, error) {
-	client, err := influxdbiox.NewClient(ctx, &influxdbiox.ClientConfig{
-		Address:  p.ioxAddress,
-		Database: session.databaseName,
-	})
-	if err != nil {
-		return 0, err
-	}
+func (p *proxy) processQuery(ctx context.Context, query string, session *session) (totalRows int, err error) {
+	defer func() {
+		var buf []byte
+		if err == nil {
+			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
+		} else {
+			buf = (&pgproto3.ErrorResponse{
+				Severity:            "ERROR",
+				SeverityUnlocalized: "ERROR",
+				Code:                "XX000", // "internal_error"
 
-	q, err := client.PrepareQuery(ctx, session.databaseName, query)
+				Message: err.Error(),
+			}).Encode(buf)
+		}
+		if _, err := p.conn.Write(buf); err != nil {
+			err = fmt.Errorf("error writing query response: %w", err)
+		}
+	}()
+
+	q, err := p.client.PrepareQuery(ctx, session.databaseName, query)
 	if err != nil {
 		return 0, err
 	}
@@ -139,8 +180,8 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 	}
 	buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
 
-	totalRows := 0
 	for {
+
 		batch, err := reader.Read()
 		if err == io.EOF {
 			break
@@ -190,16 +231,14 @@ func (p *proxy) handleStartup() (*session, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error sending request for password: %w", err)
 		}
-		if password, ok := authMessage.(*pgproto3.PasswordMessage); !ok {
+		password, ok := authMessage.(*pgproto3.PasswordMessage)
+		if !ok {
 			return nil, fmt.Errorf("unexpected message %T", authMessage)
-		} else {
-			p.token = password.Password
 		}
 		buf = (&pgproto3.AuthenticationOk{}).Encode(nil)
 		buf = (&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"}).Encode(buf)
 		buf = (&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"}).Encode(buf)
 		buf = (&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"}).Encode(buf)
-		buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 		_, err = p.conn.Write(buf)
 		if err != nil {
 			return nil, fmt.Errorf("error sending ready for query: %w", err)
@@ -208,6 +247,7 @@ func (p *proxy) handleStartup() (*session, error) {
 		return &session{
 			databaseName: startupMessage.Parameters["database"],
 			userName:     startupMessage.Parameters["user"],
+			token:        password.Password,
 		}, nil
 	case *pgproto3.SSLRequest:
 		_, err = p.conn.Write([]byte("N"))
