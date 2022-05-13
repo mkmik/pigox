@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -69,19 +70,24 @@ func (p *proxy) Run() error {
 			query := msg.String
 			log.Println("Got query", query)
 
-			totalRows, err := p.processQuery(ctx, query, session)
-
 			var buf []byte
-			if err == nil {
-				buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
+			if q := strings.TrimSpace(query); q == "" || q == ";" {
+				log.Printf("Return empty query response")
+				buf = (&pgproto3.EmptyQueryResponse{}).Encode(buf)
 			} else {
-				buf = (&pgproto3.ErrorResponse{
-					Severity:            "ERROR",
-					SeverityUnlocalized: "ERROR",
-					Code:                "XX000", // "internal_error"
+				totalRows, err := p.processQuery(ctx, query, session)
 
-					Message: err.Error(),
-				}).Encode(buf)
+				if err == nil {
+					buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
+				} else {
+					buf = (&pgproto3.ErrorResponse{
+						Severity:            "ERROR",
+						SeverityUnlocalized: "ERROR",
+						Code:                "XX000", // "internal_error"
+
+						Message: err.Error(),
+					}).Encode(buf)
+				}
 			}
 
 			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
