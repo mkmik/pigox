@@ -202,6 +202,9 @@ func render(column arrow.Array, row int) (string, error) {
 	switch typedColumn := column.(type) {
 	case *array.Timestamp:
 		return typedColumn.Value(row).ToTime(arrow.Nanosecond).Format(time.RFC3339Nano), nil
+	case *array.Duration:
+		m := typedColumn.DataType().(*arrow.DurationType).Unit.Multiplier()
+		return (time.Duration(typedColumn.Value(row)) * m).String(), nil
 	case *array.Float64:
 		return fmt.Sprint(typedColumn.Value(row)), nil
 	case *array.Uint64:
