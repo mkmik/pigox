@@ -4,18 +4,18 @@ go 1.18
 
 require (
 	github.com/alecthomas/kong v0.5.0
+	github.com/apache/arrow/go/v8 v8.0.0
+	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220512234342-81ff8e24c229
 	github.com/jackc/pgproto3/v2 v2.3.0
 )
 
 require (
 	github.com/andybalholm/brotli v1.0.4 // indirect
-	github.com/apache/arrow/go/v8 v8.0.0 // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/goccy/go-json v0.9.6 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v2.0.5+incompatible // indirect
-	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220512234342-81ff8e24c229 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/klauspost/asmfmt v1.3.1 // indirect
