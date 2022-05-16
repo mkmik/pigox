@@ -141,11 +141,10 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 	defer reader.Release()
 
 	fields := reader.Schema().Fields()
-	log.Printf("fields %#v", fields)
 
-	var fieldDescriptions []pgproto3.FieldDescription
+	var rowDesc pgproto3.RowDescription
 	for _, f := range fields {
-		fieldDescriptions = append(fieldDescriptions, pgproto3.FieldDescription{
+		rowDesc.Fields = append(rowDesc.Fields, pgproto3.FieldDescription{
 			Name:                 []byte(f.Name),
 			TableOID:             0,
 			TableAttributeNumber: 0,
@@ -155,7 +154,7 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 			Format:               0,
 		})
 	}
-	buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
+	buf := rowDesc.Encode(nil)
 
 	for {
 		batch, err := reader.Read()
