@@ -70,7 +70,7 @@ func (p *proxy) testConnection(ctx context.Context, session *session) error {
 	return nil
 }
 
-func (p *proxy) Run() error {
+func (p *proxy) run() error {
 	session, err := p.handleStartup()
 	if err != nil {
 		return err
@@ -288,7 +288,7 @@ func (p *proxy) Close() error {
 }
 
 func (p *proxy) Serve() {
-	err := p.Run()
+	err := p.run()
 	defer p.Close()
 	if err != nil {
 		log.Println("writing error to conn: ", err)
