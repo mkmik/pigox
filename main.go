@@ -84,6 +84,20 @@ func (p *proxy) Run() error {
 		return err
 	}
 
+	if session.token != "hunter12" {
+		return fmt.Errorf("authentication error. Everyone knows the password should be hunter12")
+	}
+
+	err = writeMessages(p.conn,
+		&pgproto3.AuthenticationOk{},
+		&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"},
+		&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"},
+		&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"},
+	)
+	if err != nil {
+		return fmt.Errorf("error sending ready for query: %w", err)
+	}
+
 	if err := writeMessages(p.conn, &pgproto3.ReadyForQuery{TxStatus: 'I'}); err != nil {
 		return fmt.Errorf("error writing query response: %w", err)
 	}
@@ -207,15 +221,6 @@ func (p *proxy) handleStartup() (*session, error) {
 		password, ok := authMessage.(*pgproto3.PasswordMessage)
 		if !ok {
 			return nil, fmt.Errorf("unexpected message %T", authMessage)
-		}
-		err = writeMessages(p.conn,
-			&pgproto3.AuthenticationOk{},
-			&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"},
-			&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"},
-			&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error sending ready for query: %w", err)
 		}
 		log.Printf("parameters %#v", startupMessage.Parameters)
 		return &session{
