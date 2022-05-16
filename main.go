@@ -141,14 +141,18 @@ func (p *proxy) Run() error {
 					log.Println(err)
 				}
 			}
-			if err := writeMessages(p.conn, &pgproto3.ReadyForQuery{TxStatus: 'I'}); err != nil {
-				return fmt.Errorf("error writing query response: %w", err)
-			}
 		case *pgproto3.Terminate:
 			log.Println("got terminate message")
 			return nil
+		case *pgproto3.Parse:
+			writeError(p.conn, "ERROR", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("prepared statements are not yet implemented in IOx")))
 		default:
-			return fmt.Errorf("received message other than Query from client: %#v", msg)
+			writeError(p.conn, "ERROR", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("received message other than Query from client: %#v", msg)))
+		}
+
+		// some clients expect a ReadForQuery message before reporiting the error message to the user.
+		if err := writeMessages(p.conn, &pgproto3.ReadyForQuery{TxStatus: 'I'}); err != nil {
+			return fmt.Errorf("error writing query response: %w", err)
 		}
 	}
 }
@@ -280,7 +284,7 @@ func renderString(column arrow.Array, row int) (string, error) {
 	case *array.Boolean:
 		return fmt.Sprint(typedColumn.Value(row)), nil
 	default:
-		return "", fmt.Errorf("unsupported arrow type %q", column.DataType().Name())
+		return "", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("unsupported arrow type %q", column.DataType().Name()))
 	}
 }
 
