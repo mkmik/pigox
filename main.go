@@ -62,8 +62,6 @@ func (p *proxy) testConnection(ctx context.Context, session *session) error {
 }
 
 func (p *proxy) Run() error {
-	defer p.Close()
-
 	session, err := p.handleStartup()
 	if err != nil {
 		return err
@@ -82,7 +80,7 @@ func (p *proxy) Run() error {
 
 	if err := p.testConnection(ctx, session); err != nil {
 		log.Printf("cannot connect downstream: %v", err)
-		return writeError(p.conn, "FATAL", err)
+		return err
 	}
 
 	if err := writeMessages(p.conn, &pgproto3.ReadyForQuery{TxStatus: 'I'}); err != nil {
@@ -171,13 +169,12 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 
 		bcols := batch.Columns()
 		for r := 0; r < nrows; r++ {
-			var cols [][]byte
+			cols := make([][]byte, len(fields))
 			for c := range fields {
-				b, err := render(bcols[c], r)
+				cols[c], err = renderText(bcols[c], r)
 				if err != nil {
 					return 0, err
 				}
-				cols = append(cols, []byte(b))
 			}
 			buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
 		}
@@ -237,7 +234,7 @@ func (p *proxy) handleStartup() (*session, error) {
 	}
 }
 
-func render(column arrow.Array, row int) (string, error) {
+func renderString(column arrow.Array, row int) (string, error) {
 	if column.IsNull(row) {
 		return "NULL", nil
 	}
@@ -262,6 +259,11 @@ func render(column arrow.Array, row int) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported arrow type %q", column.DataType().Name())
 	}
+}
+
+func renderText(column arrow.Array, row int) ([]byte, error) {
+	s, err := renderString(column, row)
+	return []byte(s), err
 }
 
 func (p *proxy) Close() error {
@@ -305,8 +307,12 @@ func (cmd *CLI) Run(cli *Context) error {
 
 		go func() {
 			err := b.Run()
+			defer b.Close()
 			if err != nil {
-				log.Println(err)
+				log.Println("writing error to conn: ", err)
+				if err := writeError(conn, "FATAL", err); err != nil {
+					log.Printf("cannot return error to client: %v", err)
+				}
 			}
 			log.Println("Closed connection from", conn.RemoteAddr())
 		}()
