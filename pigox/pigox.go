@@ -201,7 +201,7 @@ func (p *Proxy) processQuery(ctx context.Context, query string, session *session
 		for r := 0; r < nrows; r++ {
 			cols := make([][]byte, len(fields))
 			for c := range fields {
-				cols[c], err = renderText(bcols[c], r)
+				cols[c], err = renderBytes(bcols[c], r)
 				if err != nil {
 					return 0, err
 				}
@@ -255,19 +255,46 @@ func (p *Proxy) handleStartup() (*session, error) {
 	}
 }
 
-func renderString(column arrow.Array, row int) (string, error) {
+func renderText(column arrow.Array, row int) (string, error) {
 	if column.IsNull(row) {
 		return "NULL", nil
 	}
 	switch typedColumn := column.(type) {
 	case *array.Timestamp:
-		return typedColumn.Value(row).ToTime(arrow.Nanosecond).Format(time.RFC3339Nano), nil
+		unit := typedColumn.DataType().(*arrow.TimestampType).Unit
+		return typedColumn.Value(row).ToTime(unit).Format(time.RFC3339Nano), nil
+	case *array.Time32:
+		unit := typedColumn.DataType().(*arrow.Time32Type).Unit
+		return typedColumn.Value(row).ToTime(unit).Format(time.RFC3339Nano), nil
+	case *array.Time64:
+		unit := typedColumn.DataType().(*arrow.Time64Type).Unit
+		return typedColumn.Value(row).ToTime(unit).Format(time.RFC3339Nano), nil
+	case *array.Date32:
+		return typedColumn.Value(row).ToTime().Format(time.RFC3339Nano), nil
+	case *array.Date64:
+		return typedColumn.Value(row).ToTime().Format(time.RFC3339Nano), nil
 	case *array.Duration:
 		m := typedColumn.DataType().(*arrow.DurationType).Unit.Multiplier()
 		return (time.Duration(typedColumn.Value(row)) * m).String(), nil
+	case *array.Float16:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Float32:
+		return fmt.Sprint(typedColumn.Value(row)), nil
 	case *array.Float64:
 		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Uint8:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Uint16:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Uint32:
+		return fmt.Sprint(typedColumn.Value(row)), nil
 	case *array.Uint64:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Int8:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Int16:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Int32:
 		return fmt.Sprint(typedColumn.Value(row)), nil
 	case *array.Int64:
 		return fmt.Sprint(typedColumn.Value(row)), nil
@@ -282,8 +309,8 @@ func renderString(column arrow.Array, row int) (string, error) {
 	}
 }
 
-func renderText(column arrow.Array, row int) ([]byte, error) {
-	s, err := renderString(column, row)
+func renderBytes(column arrow.Array, row int) ([]byte, error) {
+	s, err := renderText(column, row)
 	return []byte(s), err
 }
 
