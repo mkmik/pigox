@@ -125,11 +125,10 @@ func (p *Proxy) runE() error {
 			query := msg.String
 			log.Println("Got query", query)
 
-			if isInformational(query) {
-				if err := p.handleInformational(query); err != nil {
-					writeError(p.conn, "ERROR", err)
-				}
+			if q, err := rewriteQuery(query); err != nil {
+				writeError(p.conn, "ERROR", err)
 			} else {
+				query = q
 				if q := strings.TrimSpace(query); q == "" || q == ";" {
 					log.Printf("Return empty query response")
 					if err := writeMessages(p.conn, &pgproto3.EmptyQueryResponse{}); err != nil {
@@ -265,8 +264,17 @@ func isInformational(query string) bool {
 	return strings.Contains(query, "FROM pg_catalog.")
 }
 
-func (p *Proxy) handleInformational(query string) error {
-	return fmt.Errorf("\\d* directives are not supported")
+func rewriteQuery(query string) (string, error) {
+	if isInformational(query) {
+		if strings.Contains(query, `OPERATOR(pg_catalog.~)`) {
+			return "", fmt.Errorf(`"\d <table>" is not supported`)
+		}
+		if strings.Contains(query, `AND n.nspname <> 'pg_catalog'`) {
+			return `select table_schema as "Schema", table_name as "Name", table_type as "Type", '' as "Owner" from information_schema.tables where table_schema not in ('system', 'information_schema');`, nil
+		}
+		return `select table_schema as "Schema", table_name as "Name", table_type as "Type", '' as "Owner" from information_schema.tables;`, nil
+	}
+	return query, nil
 }
 
 func renderText(column arrow.Array, row int) (string, error) {
