@@ -2,7 +2,12 @@ package pigox
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+)
+
+var (
+	sqlStringRe = regexp.MustCompile(`'((?:[^']|'')*)'`)
 )
 
 func isInformational(query string) bool {

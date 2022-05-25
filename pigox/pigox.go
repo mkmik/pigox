@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,11 +16,6 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgproto3/v2"
 	"github.com/jackc/pgtype"
-)
-
-var (
-	sqlStringRe         = regexp.MustCompile(`'((?:[^']|'')*)'`)
-	attrelidSQLStringRe = regexp.MustCompile(`WHERE a.attrelid = '((?:[^']|'')*)'`)
 )
 
 type session struct {
