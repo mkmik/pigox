@@ -20,7 +20,8 @@ import (
 )
 
 var (
-	sqlStringRe = regexp.MustCompile(`'((?:[^']|'')*)'`)
+	sqlStringRe         = regexp.MustCompile(`'((?:[^']|'')*)'`)
+	attrelidSQLStringRe = regexp.MustCompile(`WHERE a.attrelid = '((?:[^']|'')*)'`)
 )
 
 type session struct {
@@ -285,7 +286,11 @@ func rewriteQuery(query string) (string, error) {
 		} else if strings.Contains(query, `WHERE pol.polrelid =`) {
 			return `select 1 limit 0`, nil
 		} else if strings.Contains(query, `WHERE a.attrelid =`) {
-			tableName := "air_temperature"
+			groups := sqlStringRe.FindStringSubmatch(query)
+			if len(groups) < 2 {
+				return "", fmt.Errorf(`"\d <table>" is not supported`)
+			}
+			tableName := groups[1]
 			return fmt.Sprintf(`select column_name as attname, data_type as format_type, '' as pg_get_expr, false as attnotnull, '' attcollation, '' as attidentity, '' as attgenerated from information_schema.columns where table_name='%s';`, tableName), nil
 		} else if strings.Contains(query, `WHERE c.oid = `) {
 			return `select 0 as relchecks, 'r' as relkind, false as relhasindex, false as relhasrules, false as relhastriggers, false as relrowsecurity, false as relforcerowsecurity, false as relhasoids, false as relispartition, '', 0 as reltablespace, '' as reloftype, 'p' as relpersistence, 'd' as relreplident, 'heap' as amname;`, nil
