@@ -24,5 +24,5 @@ jobs:
     - name: Test
       run: go test -v ./...
 
-    - uses: imjasonh/setup-ko@v0.4
+    - uses: imjasonh/setup-ko@2c3450ca27f6e6f2b02e72a40f2163c281a1f675 # tag=v0.4
     - run: ko publish ./
