@@ -196,6 +196,8 @@ github.com/influxdata/influxdb-iox-client-go v0.0.0-20220603194630-057387c290f3 
 github.com/influxdata/influxdb-iox-client-go v0.0.0-20220603194630-057387c290f3/go.mod h1:zrziXI91VF9SCNnZ8/e4IQfo0b+hJdUvTAj/XKMCGY4=
 github.com/influxdata/influxdb-iox-client-go v0.0.0-20220606122848-f440ffefb9c8 h1:KVnLi6SpbytdHvhnamaSy6QG2aLDZIPmEr9A773bQ4s=
 github.com/influxdata/influxdb-iox-client-go v0.0.0-20220606122848-f440ffefb9c8/go.mod h1:KQhBZNMzPZaumfjA2rewaLr1cdNijSO9lYZWUovwRvI=
+github.com/influxdata/influxdb-iox-client-go v0.0.0-20220621163831-1a7f559344d1 h1:r1+95PM0MLSXRscywaYWzvWot1xuyu6en+qEGOaV8Ls=
+github.com/influxdata/influxdb-iox-client-go v0.0.0-20220621163831-1a7f559344d1/go.mod h1:w+tjw6RvV9S9smWyxM+QcbToh/puaPvFqVCywhBeheg=
 github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
 github.com/influxdata/line-protocol/v2 v2.2.1 h1:EAPkqJ9Km4uAxtMRgUubJyqAr6zgWM0dznKMLRauQRE=
 github.com/jackc/chunkreader v1.0.0/go.mod h1:RT6O25fNZIuasFJRyZ4R/Y2BbhasbmZXF9QQ7T3kePo=
