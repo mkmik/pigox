@@ -292,8 +292,20 @@ func rewriteQuery(query string) (string, error) {
 
 func makeFieldDescriptor(f arrow.Field) pgproto3.FieldDescription {
 	var typ uint32 = pgtype.TextOID
-	if f.Type.ID() == arrow.TIMESTAMP {
+	switch t := f.Type.ID(); t {
+	case arrow.TIMESTAMP:
 		typ = pgtype.TimestampOID
+		// postgres has only signed integers of 2, 4, 8 bytes respectively/
+		// arrow names the types in bit widths, and supports unsigned types.
+		// Map arrow types to postgres types that can fit it.
+	case arrow.INT8, arrow.UINT8, arrow.INT16:
+		typ = pgtype.Int2OID
+	case arrow.UINT16, arrow.INT32:
+		typ = pgtype.Int4OID
+	case arrow.UINT32, arrow.INT64:
+		typ = pgtype.Int8OID
+	case arrow.UINT64:
+		typ = pgtype.NumericOID // I _think_ this means bigint.
 	}
 	return pgproto3.FieldDescription{
 		Name:                 []byte(f.Name),
