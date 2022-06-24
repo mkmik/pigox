@@ -18,6 +18,10 @@ import (
 	"github.com/jackc/pgtype"
 )
 
+const (
+	pgTimestampFormat = "2006-01-02 15:04:05.999999999"
+)
+
 type session struct {
 	databaseName string
 	userName     string
@@ -202,15 +206,7 @@ func (p *Proxy) processQuery(ctx context.Context, query string, session *session
 
 	var rowDesc pgproto3.RowDescription
 	for _, f := range fields {
-		rowDesc.Fields = append(rowDesc.Fields, pgproto3.FieldDescription{
-			Name:                 []byte(f.Name),
-			TableOID:             0,
-			TableAttributeNumber: 0,
-			DataTypeOID:          pgtype.TextOID,
-			DataTypeSize:         -1,
-			TypeModifier:         -1,
-			Format:               0,
-		})
+		rowDesc.Fields = append(rowDesc.Fields, makeFieldDescriptor(f))
 	}
 	buf := rowDesc.Encode(nil)
 
@@ -294,6 +290,22 @@ func rewriteQuery(query string) (string, error) {
 	return query, nil
 }
 
+func makeFieldDescriptor(f arrow.Field) pgproto3.FieldDescription {
+	var typ uint32 = pgtype.TextOID
+	if f.Type.ID() == arrow.TIMESTAMP {
+		typ = pgtype.TimestampOID
+	}
+	return pgproto3.FieldDescription{
+		Name:                 []byte(f.Name),
+		TableOID:             0,
+		TableAttributeNumber: 0,
+		DataTypeOID:          typ,
+		DataTypeSize:         -1,
+		TypeModifier:         -1,
+		Format:               0,
+	}
+}
+
 func renderText(column arrow.Array, row int) (string, error) {
 	if column.IsNull(row) {
 		return "NULL", nil
@@ -301,17 +313,17 @@ func renderText(column arrow.Array, row int) (string, error) {
 	switch typedColumn := column.(type) {
 	case *array.Timestamp:
 		unit := typedColumn.DataType().(*arrow.TimestampType).Unit
-		return typedColumn.Value(row).ToTime(unit).Format(time.RFC3339Nano), nil
+		return typedColumn.Value(row).ToTime(unit).Format(pgTimestampFormat), nil
 	case *array.Time32:
 		unit := typedColumn.DataType().(*arrow.Time32Type).Unit
-		return typedColumn.Value(row).ToTime(unit).Format(time.RFC3339Nano), nil
+		return typedColumn.Value(row).ToTime(unit).Format(pgTimestampFormat), nil
 	case *array.Time64:
 		unit := typedColumn.DataType().(*arrow.Time64Type).Unit
-		return typedColumn.Value(row).ToTime(unit).Format(time.RFC3339Nano), nil
+		return typedColumn.Value(row).ToTime(unit).Format(pgTimestampFormat), nil
 	case *array.Date32:
-		return typedColumn.Value(row).ToTime().Format(time.RFC3339Nano), nil
+		return typedColumn.Value(row).ToTime().Format(pgTimestampFormat), nil
 	case *array.Date64:
-		return typedColumn.Value(row).ToTime().Format(time.RFC3339Nano), nil
+		return typedColumn.Value(row).ToTime().Format(pgTimestampFormat), nil
 	case *array.Duration:
 		m := typedColumn.DataType().(*arrow.DurationType).Unit.Multiplier()
 		return (time.Duration(typedColumn.Value(row)) * m).String(), nil
