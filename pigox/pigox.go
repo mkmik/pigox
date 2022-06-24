@@ -40,8 +40,21 @@ func newPGError(code string, err error) *pgError {
 	}
 }
 
+type proxyOptions struct {
+	requireAuth bool
+}
+
+type ProxyOption = func(opts *proxyOptions)
+
+func WithRequireAuth(requireAuth bool) func(opts *proxyOptions) {
+	return func(opts *proxyOptions) {
+		opts.requireAuth = requireAuth
+	}
+}
+
 // Proxy is a PG->IOx proxy.
 type Proxy struct {
+	proxyOptions
 	ioxAddress string
 	backend    *pgproto3.Backend
 	conn       net.Conn
@@ -51,13 +64,19 @@ type Proxy struct {
 // NewProxy creates a new PG->IOx proxy.
 //
 // ioxAddress is the address of the IOx gRPC API endpoint.
-func NewProxy(conn net.Conn, ioxAddress string) Proxy {
+func NewProxy(conn net.Conn, ioxAddress string, opt ...ProxyOption) Proxy {
+	var opts proxyOptions
+	for _, ofn := range opt {
+		ofn(&opts)
+	}
+
 	backend := pgproto3.NewBackend(pgproto3.NewChunkReader(conn), conn)
 
 	return Proxy{
-		ioxAddress: ioxAddress,
-		backend:    backend,
-		conn:       conn,
+		proxyOptions: opts,
+		ioxAddress:   ioxAddress,
+		backend:      backend,
+		conn:         conn,
 	}
 }
 
@@ -91,7 +110,8 @@ func (p *Proxy) runE() error {
 		return err
 	}
 
-	if session.token != "hunter12" {
+	// TODO: pass token to IOx client.
+	if p.requireAuth && session.token != "hunter12" {
 		return newPGError(pgerrcode.InvalidPassword, fmt.Errorf("password authentication failed for user %q", session.userName))
 	}
 
@@ -234,23 +254,27 @@ func (p *Proxy) handleStartup() (*session, error) {
 
 	switch startupMessage := startupMessage.(type) {
 	case *pgproto3.StartupMessage:
-		err := writeMessages(p.conn, &pgproto3.AuthenticationCleartextPassword{})
-		if err != nil {
-			return nil, fmt.Errorf("error sending request for password: %w", err)
-		}
-		authMessage, err := p.backend.Receive()
-		if err != nil {
-			return nil, fmt.Errorf("error sending request for password: %w", err)
-		}
-		password, ok := authMessage.(*pgproto3.PasswordMessage)
-		if !ok {
-			return nil, fmt.Errorf("unexpected message %T", authMessage)
+		var token string
+		if p.requireAuth {
+			err := writeMessages(p.conn, &pgproto3.AuthenticationCleartextPassword{})
+			if err != nil {
+				return nil, fmt.Errorf("error sending request for password: %w", err)
+			}
+			authMessage, err := p.backend.Receive()
+			if err != nil {
+				return nil, fmt.Errorf("error sending request for password: %w", err)
+			}
+			password, ok := authMessage.(*pgproto3.PasswordMessage)
+			if !ok {
+				return nil, fmt.Errorf("unexpected message %T", authMessage)
+			}
+			token = password.Password
 		}
 		log.Printf("parameters %#v", startupMessage.Parameters)
 		return &session{
 			databaseName: startupMessage.Parameters["database"],
 			userName:     startupMessage.Parameters["user"],
-			token:        password.Password,
+			token:        token,
 		}, nil
 	case *pgproto3.SSLRequest:
 		_, err = p.conn.Write([]byte("N"))
