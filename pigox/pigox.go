@@ -306,6 +306,10 @@ func makeFieldDescriptor(f arrow.Field) pgproto3.FieldDescription {
 		typ = pgtype.Int8OID
 	case arrow.UINT64:
 		typ = pgtype.NumericOID // I _think_ this means bigint.
+	case arrow.FLOAT16, arrow.FLOAT32:
+		typ = pgtype.Float4OID
+	case arrow.FLOAT64:
+		typ = pgtype.Float8OID
 	}
 	return pgproto3.FieldDescription{
 		Name:                 []byte(f.Name),
