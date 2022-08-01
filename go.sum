@@ -204,6 +204,8 @@ github.com/influxdata/influxdb-iox-client-go v0.0.0-20220627123729-349b77e3fa9c 
 github.com/influxdata/influxdb-iox-client-go v0.0.0-20220627123729-349b77e3fa9c/go.mod h1:P2T/8yTrtYjmy2dEWLEEqNkirNAeHUo6NBsYC+KxBjg=
 github.com/influxdata/influxdb-iox-client-go v0.0.0-20220628150936-c72beff65362 h1:ZTpkW6zB0ZZPPvvd77pjoenbn+2BwD8cawQPm5h9mvY=
 github.com/influxdata/influxdb-iox-client-go v0.0.0-20220628150936-c72beff65362/go.mod h1:P2T/8yTrtYjmy2dEWLEEqNkirNAeHUo6NBsYC+KxBjg=
+github.com/influxdata/influxdb-iox-client-go v0.0.0-20220801112605-da02174c434c h1:xxOw6eNzMol2EGrZMXfVRFwm50xnTbUV0MSTGRG4Crw=
+github.com/influxdata/influxdb-iox-client-go v0.0.0-20220801112605-da02174c434c/go.mod h1:mv2y/j44DULXGyvPVy9rMRcCDI0Hhe/OZ9zwO+3YgeA=
 github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
 github.com/influxdata/line-protocol/v2 v2.2.1 h1:EAPkqJ9Km4uAxtMRgUubJyqAr6zgWM0dznKMLRauQRE=
 github.com/jackc/chunkreader v1.0.0/go.mod h1:RT6O25fNZIuasFJRyZ4R/Y2BbhasbmZXF9QQ7T3kePo=
@@ -667,6 +669,8 @@ google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQ
 google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.28.0 h1:w43yiav+6bVFTBQFZX0r7ipe9JQ1QsbMgHwbBziscLw=
 google.golang.org/protobuf v1.28.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
+google.golang.org/protobuf v1.28.1 h1:d0NfwRgPtno5B1Wa6L2DAG+KivqkdutMf1UhdNx175w=
+google.golang.org/protobuf v1.28.1/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
