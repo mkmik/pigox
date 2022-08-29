@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/alecthomas/kong"
-	"github.com/mkmik/pigox/pigox"
+	"github.com/mkmik/pigox/pkg/pigox"
 )
 
 // Context is a CLI context.
