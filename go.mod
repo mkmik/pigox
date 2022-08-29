@@ -1,4 +1,4 @@
-module github.com/mkmik/piggo
+module github.com/mkmik/pigox
 
 go 1.18
 
