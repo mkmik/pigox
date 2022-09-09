@@ -76,7 +76,6 @@ func (p *proxy) Run() error {
 				buf = (&pgproto3.EmptyQueryResponse{}).Encode(buf)
 			} else {
 				totalRows, err := p.processQuery(ctx, query, session)
-
 				if err == nil {
 					buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
 				} else {
@@ -168,6 +167,7 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 		if err != nil {
 			return 0, fmt.Errorf("error writing query response: %w", err)
 		}
+		buf = nil
 	}
 
 	return totalRows, nil
