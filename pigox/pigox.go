@@ -40,24 +40,28 @@ func newPGError(code string, err error) *pgError {
 	}
 }
 
-type proxy struct {
+// Proxy is a PG->IOx proxy.
+type Proxy struct {
 	ioxAddress string
 	backend    *pgproto3.Backend
 	conn       net.Conn
 	client     *influxdbiox.Client
 }
 
-func NewProxy(conn net.Conn, ioxAddress string) proxy {
+// NewProxy creates a new PG->IOx proxy.
+//
+// ioxAddress is the address of the IOx gRPC API endpoint.
+func NewProxy(conn net.Conn, ioxAddress string) Proxy {
 	backend := pgproto3.NewBackend(pgproto3.NewChunkReader(conn), conn)
 
-	return proxy{
+	return Proxy{
 		ioxAddress: ioxAddress,
 		backend:    backend,
 		conn:       conn,
 	}
 }
 
-func (p *proxy) testConnection(ctx context.Context, session *session) error {
+func (p *Proxy) testConnection(ctx context.Context, session *session) error {
 	q, err := p.client.PrepareQuery(ctx, session.databaseName, "select 1")
 	if err != nil {
 		return err
@@ -70,7 +74,7 @@ func (p *proxy) testConnection(ctx context.Context, session *session) error {
 	return nil
 }
 
-func (p *proxy) run() error {
+func (p *Proxy) runE() error {
 	session, err := p.handleStartup()
 	if err != nil {
 		return err
@@ -147,7 +151,7 @@ func (p *proxy) run() error {
 	}
 }
 
-func (p *proxy) processQuery(ctx context.Context, query string, session *session) (totalRows int, err error) {
+func (p *Proxy) processQuery(ctx context.Context, query string, session *session) (totalRows int, err error) {
 	defer func() {
 		if err == nil {
 			err = writeMessages(p.conn, &pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))})
@@ -214,7 +218,7 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 	return totalRows, nil
 }
 
-func (p *proxy) handleStartup() (*session, error) {
+func (p *Proxy) handleStartup() (*session, error) {
 	startupMessage, err := p.backend.ReceiveStartupMessage()
 	if err != nil {
 		return nil, fmt.Errorf("error receiving startup message: %w", err)
@@ -283,14 +287,16 @@ func renderText(column arrow.Array, row int) ([]byte, error) {
 	return []byte(s), err
 }
 
-func (p *proxy) Close() error {
+// Close terminates a pigox proxy connection.
+func (p *Proxy) Close() error {
 	return p.conn.Close()
 }
 
-func (p *proxy) Serve() {
-	err := p.run()
+// Run runs the PG->IOx proxy protocol.
+func (p *Proxy) Run() {
 	defer p.Close()
-	if err != nil {
+
+	if err := p.runE(); err != nil {
 		log.Println("writing error to conn: ", err)
 		if err := writeError(p.conn, "FATAL", err); err != nil {
 			log.Printf("cannot return error to client: %v", err)
