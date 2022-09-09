@@ -1,4 +1,4 @@
-# piggo
+# pigox
 
 Start IOx:
 
@@ -12,10 +12,10 @@ Load some data into IOx
 $ curl -i -X POST "http://localhost:8080/api/v2/write?bucket=weather&org=foobar&precision=s" --data-binary @./test_fixtures/lineproto/air_and_water.lp
 ```
 
-Build and start the piggo proxy:
+Build and start the pigox proxy:
 
 ```console
-$ go build && ./piggo
+$ go build && ./pigox
 2022/05/13 03:28:05 Listening on 127.0.0.1:1234
 ```
 
