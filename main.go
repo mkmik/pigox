@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"github.com/apache/arrow/go/v7/arrow"
 	"github.com/apache/arrow/go/v7/arrow/array"
 	influxdbiox "github.com/influxdata/influxdb-iox-client-go"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgproto3/v2"
 	"github.com/jackc/pgtype"
 )
@@ -30,6 +32,22 @@ type session struct {
 	databaseName string
 	userName     string
 	token        string
+}
+
+type pgError struct {
+	error
+	code string
+}
+
+func (p *pgError) Unwrap() error {
+	return p.error
+}
+
+func newPGError(code string, err error) *pgError {
+	return &pgError{
+		error: err,
+		code:  code,
+	}
 }
 
 type proxy struct {
@@ -79,13 +97,13 @@ func (p *proxy) Run() error {
 		return err
 	}
 
+	if session.token != "hunter12" {
+		return newPGError(pgerrcode.InvalidPassword, fmt.Errorf("password authentication failed for user %q", session.userName))
+	}
+
 	if err := p.testConnection(ctx, session); err != nil {
 		log.Printf("cannot connect downstream: %v", err)
 		return err
-	}
-
-	if session.token != "hunter12" {
-		return fmt.Errorf("authentication error. Everyone knows the password should be hunter12")
 	}
 
 	err = writeMessages(p.conn,
@@ -286,10 +304,15 @@ func writeMessages(w io.Writer, msgs ...pgproto3.Message) error {
 }
 
 func writeError(w io.Writer, severity string, err error) error {
+	code := pgerrcode.InternalError
+	var perr *pgError
+	if errors.As(err, &perr) {
+		code = perr.code
+	}
 	return writeMessages(w, &pgproto3.ErrorResponse{
 		Severity:            severity,
 		SeverityUnlocalized: severity,
-		Code:                "XX000", // "internal_error"
+		Code:                code,
 		Message:             err.Error(),
 	})
 }
