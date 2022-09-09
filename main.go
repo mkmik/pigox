@@ -15,8 +15,8 @@ type Context struct {
 
 // CLI contains the CLI parameters.
 type CLI struct {
-	ListenAddress string `optional:"" default:"localhost:1234"`
-	IOxAddress    string `optional:"" default:"localhost:8082"`
+	ListenAddress string `optional:"" default:"0.0.0.0:5432"`
+	IOxAddress    string `name:"iox-querier-grpc-address" optional:"" default:"localhost:8082"`
 }
 
 // Run is the main body of the CLI.
