@@ -125,14 +125,20 @@ func (p *Proxy) runE() error {
 			query := msg.String
 			log.Println("Got query", query)
 
-			if q := strings.TrimSpace(query); q == "" || q == ";" {
-				log.Printf("Return empty query response")
-				if err := writeMessages(p.conn, &pgproto3.EmptyQueryResponse{}); err != nil {
-					return fmt.Errorf("error writing query response: %w", err)
+			if isInformational(query) {
+				if err := p.handleInformational(query); err != nil {
+					writeError(p.conn, "ERROR", err)
 				}
 			} else {
-				if _, err := p.processQuery(ctx, query, session); err != nil {
-					log.Println(err)
+				if q := strings.TrimSpace(query); q == "" || q == ";" {
+					log.Printf("Return empty query response")
+					if err := writeMessages(p.conn, &pgproto3.EmptyQueryResponse{}); err != nil {
+						return fmt.Errorf("error writing query response: %w", err)
+					}
+				} else {
+					if _, err := p.processQuery(ctx, query, session); err != nil {
+						log.Println(err)
+					}
 				}
 			}
 		case *pgproto3.Terminate:
@@ -253,6 +259,14 @@ func (p *Proxy) handleStartup() (*session, error) {
 	default:
 		return nil, fmt.Errorf("unknown startup message: %#v", startupMessage)
 	}
+}
+
+func isInformational(query string) bool {
+	return strings.Contains(query, "FROM pg_catalog.")
+}
+
+func (p *Proxy) handleInformational(query string) error {
+	return fmt.Errorf("\\d* directives are not supported")
 }
 
 func renderText(column arrow.Array, row int) (string, error) {
