@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/apache/arrow/go/v8/arrow"
+	"github.com/apache/arrow/go/v8/arrow/array"
 	influxdbiox "github.com/influxdata/influxdb-iox-client-go"
 	"github.com/jackc/pgproto3/v2"
 )
@@ -80,8 +83,6 @@ func (p *proxy) Run() error {
 			fields := reader.Schema().Fields()
 			log.Printf("fields %#v", fields)
 
-			response := []byte("foo")
-
 			var fieldDescriptions []pgproto3.FieldDescription
 			for _, f := range fields {
 				fieldDescriptions = append(fieldDescriptions, pgproto3.FieldDescription{
@@ -96,14 +97,27 @@ func (p *proxy) Run() error {
 			}
 			buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
 
-			var cols [][]byte
-			for range fields {
-				cols = append(cols, response)
+			batch, err := reader.Read()
+			if err != nil {
+				return err
 			}
-			buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
-			buf = (&pgproto3.CommandComplete{CommandTag: []byte("SELECT 1")}).Encode(buf)
-			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 
+			nrows := int(batch.NumRows())
+			bcols := batch.Columns()
+			for r := 0; r < nrows; r++ {
+				var cols [][]byte
+				for c := range fields {
+					b, err := render(bcols[c], r)
+					if err != nil {
+						return err
+					}
+					cols = append(cols, []byte(b))
+				}
+				buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
+			}
+
+			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", nrows))}).Encode(buf)
+			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 			reader.Release()
 			_, err = p.conn.Write(buf)
 			if err != nil {
@@ -147,6 +161,30 @@ func (p *proxy) handleStartup() (*session, error) {
 	}
 }
 
+func render(column arrow.Array, row int) (string, error) {
+	if column.IsNull(row) {
+		return "NULL", nil
+	}
+	switch typedColumn := column.(type) {
+	case *array.Timestamp:
+		return typedColumn.Value(row).ToTime(arrow.Nanosecond).Format(time.RFC3339Nano), nil
+	case *array.Float64:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Uint64:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Int64:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.String:
+		return typedColumn.Value(row), nil
+	case *array.Binary:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	case *array.Boolean:
+		return fmt.Sprint(typedColumn.Value(row)), nil
+	default:
+		return "", fmt.Errorf("unsupported arrow type %q", column.DataType().Name())
+	}
+}
+
 func (p *proxy) Close() error {
 	return p.conn.Close()
 }
@@ -175,8 +213,6 @@ func (cmd *CLI) Run(cli *Context) error {
 			log.Println("Closed connection from", conn.RemoteAddr())
 		}()
 	}
-
-	return nil
 }
 
 func main() {
