@@ -125,9 +125,13 @@ func (p *proxy) Run() error {
 					}
 					buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
 				}
+				_, err = p.conn.Write(buf)
+				if err != nil {
+					return fmt.Errorf("error writing query response: %w", err)
+				}
 			}
 
-			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
+			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(nil)
 			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 			reader.Release()
 			_, err = p.conn.Write(buf)
