@@ -74,7 +74,13 @@ func (p *proxy) Run() error {
 			if err == nil {
 				buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
 			} else {
-				buf = (&pgproto3.ErrorResponse{Message: err.Error()}).Encode(buf)
+				buf = (&pgproto3.ErrorResponse{
+					Severity:            "ERROR",
+					SeverityUnlocalized: "ERROR",
+					Code:                "XX000", // "internal_error"
+
+					Message: err.Error(),
+				}).Encode(buf)
 			}
 
 			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
