@@ -303,7 +303,11 @@ func renderText(column arrow.Array, row int) (string, error) {
 	case *array.Binary:
 		return fmt.Sprint(typedColumn.Value(row)), nil
 	case *array.Boolean:
-		return fmt.Sprint(typedColumn.Value(row)), nil
+		if typedColumn.Value(row) {
+			return "t", nil
+		} else {
+			return "f", nil
+		}
 	default:
 		return "", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("unsupported arrow type %q", column.DataType().Name()))
 	}
