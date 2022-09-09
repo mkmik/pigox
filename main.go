@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
-	"github.com/apache/arrow/go/v8/arrow"
-	"github.com/apache/arrow/go/v8/arrow/array"
+	"github.com/apache/arrow/go/v7/arrow"
+	"github.com/apache/arrow/go/v7/arrow/array"
 	influxdbiox "github.com/influxdata/influxdb-iox-client-go"
 	"github.com/jackc/pgproto3/v2"
 )
