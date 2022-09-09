@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/alecthomas/kong v0.5.0
 	github.com/apache/arrow/go/v7 v7.0.0
-	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220603194630-057387c290f3
+	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220606122848-f440ffefb9c8
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgproto3/v2 v2.3.0
 	github.com/jackc/pgtype v1.11.0
