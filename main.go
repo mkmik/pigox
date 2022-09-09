@@ -147,7 +147,7 @@ func (p *proxy) Run() error {
 		case *pgproto3.Parse:
 			writeError(p.conn, "ERROR", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("prepared statements are not yet implemented in IOx")))
 		default:
-			writeError(p.conn, "ERROR", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("received message other than Query from client: %#v", msg)))
+			writeError(p.conn, "ERROR", newPGError(pgerrcode.FeatureNotSupported, fmt.Errorf("unsupported message type: %T", msg)))
 		}
 
 		// some clients expect a ReadForQuery message before reporiting the error message to the user.
