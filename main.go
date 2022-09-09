@@ -57,14 +57,6 @@ func (p *proxy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client, err := influxdbiox.NewClient(ctx, &influxdbiox.ClientConfig{
-		Address:  p.ioxAddress,
-		Database: session.databaseName,
-	})
-	if err != nil {
-		return err
-	}
-
 	for {
 		msg, err := p.backend.Receive()
 		if err != nil {
@@ -76,64 +68,16 @@ func (p *proxy) Run() error {
 			query := msg.String
 			log.Println("Got query", query)
 
-			q, err := client.PrepareQuery(ctx, session.databaseName, query)
-			if err != nil {
-				return err
-			}
-			reader, err := q.Query(ctx)
-			if err != nil {
-				return err
-			}
-			fields := reader.Schema().Fields()
-			log.Printf("fields %#v", fields)
+			totalRows, err := p.processQuery(ctx, query, session)
 
-			var fieldDescriptions []pgproto3.FieldDescription
-			for _, f := range fields {
-				fieldDescriptions = append(fieldDescriptions, pgproto3.FieldDescription{
-					Name:                 []byte(f.Name),
-					TableOID:             0,
-					TableAttributeNumber: 0,
-					DataTypeOID:          25,
-					DataTypeSize:         -1,
-					TypeModifier:         -1,
-					Format:               0,
-				})
-			}
-			buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
-
-			totalRows := 0
-			for {
-				batch, err := reader.Read()
-				if err == io.EOF {
-					break
-				} else if err != nil {
-					return err
-				}
-
-				nrows := int(batch.NumRows())
-				totalRows += nrows
-
-				bcols := batch.Columns()
-				for r := 0; r < nrows; r++ {
-					var cols [][]byte
-					for c := range fields {
-						b, err := render(bcols[c], r)
-						if err != nil {
-							return err
-						}
-						cols = append(cols, []byte(b))
-					}
-					buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
-				}
-				_, err = p.conn.Write(buf)
-				if err != nil {
-					return fmt.Errorf("error writing query response: %w", err)
-				}
+			var buf []byte
+			if err == nil {
+				buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
+			} else {
+				buf = (&pgproto3.ErrorResponse{Message: err.Error()}).Encode(buf)
 			}
 
-			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(nil)
 			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
-			reader.Release()
 			_, err = p.conn.Write(buf)
 			if err != nil {
 				return fmt.Errorf("error writing query response: %w", err)
@@ -145,6 +89,75 @@ func (p *proxy) Run() error {
 			return fmt.Errorf("received message other than Query from client: %#v", msg)
 		}
 	}
+}
+
+func (p *proxy) processQuery(ctx context.Context, query string, session *session) (int, error) {
+	client, err := influxdbiox.NewClient(ctx, &influxdbiox.ClientConfig{
+		Address:  p.ioxAddress,
+		Database: session.databaseName,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	q, err := client.PrepareQuery(ctx, session.databaseName, query)
+	if err != nil {
+		return 0, err
+	}
+	reader, err := q.Query(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer reader.Release()
+
+	fields := reader.Schema().Fields()
+	log.Printf("fields %#v", fields)
+
+	var fieldDescriptions []pgproto3.FieldDescription
+	for _, f := range fields {
+		fieldDescriptions = append(fieldDescriptions, pgproto3.FieldDescription{
+			Name:                 []byte(f.Name),
+			TableOID:             0,
+			TableAttributeNumber: 0,
+			DataTypeOID:          25,
+			DataTypeSize:         -1,
+			TypeModifier:         -1,
+			Format:               0,
+		})
+	}
+	buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
+
+	totalRows := 0
+	for {
+		batch, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return 0, err
+		}
+
+		nrows := int(batch.NumRows())
+		totalRows += nrows
+
+		bcols := batch.Columns()
+		for r := 0; r < nrows; r++ {
+			var cols [][]byte
+			for c := range fields {
+				b, err := render(bcols[c], r)
+				if err != nil {
+					return 0, err
+				}
+				cols = append(cols, []byte(b))
+			}
+			buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
+		}
+		_, err = p.conn.Write(buf)
+		if err != nil {
+			return 0, fmt.Errorf("error writing query response: %w", err)
+		}
+	}
+
+	return totalRows, nil
 }
 
 func (p *proxy) handleStartup() (*session, error) {
