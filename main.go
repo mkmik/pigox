@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 
 	"github.com/alecthomas/kong"
+	influxdbiox "github.com/influxdata/influxdb-iox-client-go"
 	"github.com/jackc/pgproto3/v2"
 )
 
@@ -15,6 +17,11 @@ type Context struct {
 
 type CLI struct {
 	ListenAddress string `optional:"" default:"localhost:1234"`
+}
+
+type session struct {
+	databaseName string
+	userName     string
 }
 
 type proxy struct {
@@ -34,10 +41,23 @@ func newProxy(conn net.Conn) proxy {
 func (p *proxy) Run() error {
 	defer p.Close()
 
-	err := p.handleStartup()
+	session, err := p.handleStartup()
 	if err != nil {
 		return err
 	}
+	log.Printf("session %#v", session)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client, err := influxdbiox.NewClient(ctx, &influxdbiox.ClientConfig{
+		Address:  "localhost:8082",
+		Database: session.databaseName,
+	})
+	if err != nil {
+		return err
+	}
+	_ = client
 
 	for {
 		msg, err := p.backend.Receive()
@@ -78,31 +98,33 @@ func (p *proxy) Run() error {
 	}
 }
 
-func (p *proxy) handleStartup() error {
+func (p *proxy) handleStartup() (*session, error) {
 	startupMessage, err := p.backend.ReceiveStartupMessage()
 	if err != nil {
-		return fmt.Errorf("error receiving startup message: %w", err)
+		return nil, fmt.Errorf("error receiving startup message: %w", err)
 	}
 
-	switch startupMessage.(type) {
+	switch startupMessage := startupMessage.(type) {
 	case *pgproto3.StartupMessage:
 		buf := (&pgproto3.AuthenticationOk{}).Encode(nil)
 		buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 		_, err = p.conn.Write(buf)
 		if err != nil {
-			return fmt.Errorf("error sending ready for query: %w", err)
+			return nil, fmt.Errorf("error sending ready for query: %w", err)
 		}
+		return &session{
+			databaseName: startupMessage.Parameters["database"],
+			userName:     startupMessage.Parameters["user"],
+		}, nil
 	case *pgproto3.SSLRequest:
 		_, err = p.conn.Write([]byte("N"))
 		if err != nil {
-			return fmt.Errorf("error sending deny SSL request: %w", err)
+			return nil, fmt.Errorf("error sending deny SSL request: %w", err)
 		}
 		return p.handleStartup()
 	default:
-		return fmt.Errorf("unknown startup message: %#v", startupMessage)
+		return nil, fmt.Errorf("unknown startup message: %#v", startupMessage)
 	}
-
-	return nil
 }
 
 func (p *proxy) Close() error {
