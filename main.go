@@ -17,6 +17,8 @@ type Context struct {
 type CLI struct {
 	ListenAddress string `optional:"" default:"0.0.0.0:5432" env:"PIGOX_LISTEN_ADDRESS"`
 	IOxAddress    string `name:"iox-querier-grpc-address" optional:"" default:"localhost:8082" env:"PIGOX_IOX_QUERIER_GRPC_ADDRESS"`
+
+	RequireAuth bool `name:"require-auth" optional:"" default:"false" env:"PIGOX_REQUIRE_AUTH"`
 }
 
 // Run is the main body of the CLI.
@@ -34,7 +36,7 @@ func (cmd *CLI) Run(cli *Context) error {
 		}
 		log.Println("Accepted connection from", conn.RemoteAddr())
 
-		b := pigox.NewProxy(conn, cmd.IOxAddress)
+		b := pigox.NewProxy(conn, cmd.IOxAddress, pigox.WithRequireAuth(cmd.RequireAuth))
 		go func() {
 			b.Run()
 			log.Println("Closed connection from", conn.RemoteAddr())
