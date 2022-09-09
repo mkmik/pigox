@@ -7,13 +7,14 @@ require (
 	github.com/apache/arrow/go/v7 v7.0.0
 	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220513150534-d29d8f875d9b
 	github.com/jackc/pgproto3/v2 v2.3.0
+	github.com/jackc/pgtype v1.11.0
 )
 
 require (
 	github.com/goccy/go-json v0.9.7 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/flatbuffers v2.0.6+incompatible // indirect
-	github.com/jackc/chunkreader/v2 v2.0.0 // indirect
+	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect

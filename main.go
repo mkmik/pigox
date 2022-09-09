@@ -14,6 +14,7 @@ import (
 	"github.com/apache/arrow/go/v7/arrow/array"
 	influxdbiox "github.com/influxdata/influxdb-iox-client-go"
 	"github.com/jackc/pgproto3/v2"
+	"github.com/jackc/pgtype"
 )
 
 type Context struct {
@@ -148,7 +149,7 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 			Name:                 []byte(f.Name),
 			TableOID:             0,
 			TableAttributeNumber: 0,
-			DataTypeOID:          25,
+			DataTypeOID:          pgtype.TextOID,
 			DataTypeSize:         -1,
 			TypeModifier:         -1,
 			Format:               0,
