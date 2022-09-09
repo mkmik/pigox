@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/alecthomas/kong v0.6.1
 	github.com/apache/arrow/go/v7 v7.0.1
-	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220628150936-c72beff65362
+	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220801112605-da02174c434c
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgproto3/v2 v2.3.0
 	github.com/jackc/pgtype v1.11.0
@@ -28,5 +28,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
 	google.golang.org/genproto v0.0.0-20220505152158-f39f71e6c8f3 // indirect
 	google.golang.org/grpc v1.46.0 // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 )
