@@ -57,7 +57,6 @@ func (p *proxy) Run() error {
 	if err != nil {
 		return err
 	}
-	_ = client
 
 	for {
 		msg, err := p.backend.Receive()
@@ -67,24 +66,45 @@ func (p *proxy) Run() error {
 
 		switch msg := msg.(type) {
 		case *pgproto3.Query:
-			log.Println("Got query", msg.String)
+			query := msg.String
+			log.Println("Got query", query)
+
+			q, err := client.PrepareQuery(ctx, session.databaseName, query)
+			if err != nil {
+				return err
+			}
+			reader, err := q.Query(ctx)
+			if err != nil {
+				return err
+			}
+			fields := reader.Schema().Fields()
+			log.Printf("fields %#v", fields)
 
 			response := []byte("foo")
 
-			buf := (&pgproto3.RowDescription{Fields: []pgproto3.FieldDescription{
-				{
-					Name:                 []byte("fortune"),
+			var fieldDescriptions []pgproto3.FieldDescription
+			for _, f := range fields {
+				fieldDescriptions = append(fieldDescriptions, pgproto3.FieldDescription{
+					Name:                 []byte(f.Name),
 					TableOID:             0,
 					TableAttributeNumber: 0,
 					DataTypeOID:          25,
 					DataTypeSize:         -1,
 					TypeModifier:         -1,
 					Format:               0,
-				},
-			}}).Encode(nil)
-			buf = (&pgproto3.DataRow{Values: [][]byte{response}}).Encode(buf)
+				})
+			}
+			buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
+
+			var cols [][]byte
+			for range fields {
+				cols = append(cols, response)
+			}
+			buf = (&pgproto3.DataRow{Values: cols}).Encode(buf)
 			buf = (&pgproto3.CommandComplete{CommandTag: []byte("SELECT 1")}).Encode(buf)
 			buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
+
+			reader.Release()
 			_, err = p.conn.Write(buf)
 			if err != nil {
 				return fmt.Errorf("error writing query response: %w", err)
