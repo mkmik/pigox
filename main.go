@@ -21,6 +21,7 @@ type Context struct {
 
 type CLI struct {
 	ListenAddress string `optional:"" default:"localhost:1234"`
+	IOxAddress    string `optional:"" default:"localhost:8082"`
 }
 
 type session struct {
@@ -29,16 +30,18 @@ type session struct {
 }
 
 type proxy struct {
-	backend *pgproto3.Backend
-	conn    net.Conn
+	ioxAddress string
+	backend    *pgproto3.Backend
+	conn       net.Conn
 }
 
-func newProxy(conn net.Conn) proxy {
+func newProxy(conn net.Conn, ioxAddress string) proxy {
 	backend := pgproto3.NewBackend(pgproto3.NewChunkReader(conn), conn)
 
 	return proxy{
-		backend: backend,
-		conn:    conn,
+		ioxAddress: ioxAddress,
+		backend:    backend,
+		conn:       conn,
 	}
 }
 
@@ -55,7 +58,7 @@ func (p *proxy) Run() error {
 	defer cancel()
 
 	client, err := influxdbiox.NewClient(ctx, &influxdbiox.ClientConfig{
-		Address:  "localhost:8082",
+		Address:  p.ioxAddress,
 		Database: session.databaseName,
 	})
 	if err != nil {
@@ -211,7 +214,7 @@ func (cmd *CLI) Run(cli *Context) error {
 		}
 		log.Println("Accepted connection from", conn.RemoteAddr())
 
-		b := newProxy(conn)
+		b := newProxy(conn, cmd.IOxAddress)
 
 		go func() {
 			err := b.Run()
