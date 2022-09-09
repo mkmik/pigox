@@ -82,21 +82,11 @@ func (p *proxy) Run() error {
 
 	if err := p.testConnection(ctx, session); err != nil {
 		log.Printf("cannot connect downstream: %v", err)
-		buf := (&pgproto3.ErrorResponse{
-			Severity:            "FATAL",
-			SeverityUnlocalized: "FATAL",
-			Code:                "XX000", // "internal_error"
-
-			Message: err.Error(),
-		}).Encode(nil)
-		if _, err = p.conn.Write(buf); err != nil {
-			return fmt.Errorf("error writing query response: %w", err)
-		}
-		return err
+		return writeError(p.conn, "FATAL", err)
 	}
-	buf := (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(nil)
-	if _, err := p.conn.Write(buf); err != nil {
-		err = fmt.Errorf("error writing query response: %w", err)
+
+	if err := writeMessages(p.conn, &pgproto3.ReadyForQuery{TxStatus: 'I'}); err != nil {
+		return fmt.Errorf("error writing query response: %w", err)
 	}
 
 	for {
@@ -112,8 +102,7 @@ func (p *proxy) Run() error {
 
 			if q := strings.TrimSpace(query); q == "" || q == ";" {
 				log.Printf("Return empty query response")
-				buf := (&pgproto3.EmptyQueryResponse{}).Encode(nil)
-				if _, err := p.conn.Write(buf); err != nil {
+				if err := writeMessages(p.conn, &pgproto3.EmptyQueryResponse{}); err != nil {
 					return fmt.Errorf("error writing query response: %w", err)
 				}
 			} else {
@@ -121,9 +110,8 @@ func (p *proxy) Run() error {
 					log.Println(err)
 				}
 			}
-			buf := (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(nil)
-			if _, err := p.conn.Write(buf); err != nil {
-				err = fmt.Errorf("error writing query response: %w", err)
+			if err := writeMessages(p.conn, &pgproto3.ReadyForQuery{TxStatus: 'I'}); err != nil {
+				return fmt.Errorf("error writing query response: %w", err)
 			}
 		case *pgproto3.Terminate:
 			log.Println("got terminate message")
@@ -136,20 +124,10 @@ func (p *proxy) Run() error {
 
 func (p *proxy) processQuery(ctx context.Context, query string, session *session) (totalRows int, err error) {
 	defer func() {
-		var buf []byte
 		if err == nil {
-			buf = (&pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))}).Encode(buf)
+			err = writeMessages(p.conn, &pgproto3.CommandComplete{CommandTag: []byte(fmt.Sprintf("SELECT %d", totalRows))})
 		} else {
-			buf = (&pgproto3.ErrorResponse{
-				Severity:            "ERROR",
-				SeverityUnlocalized: "ERROR",
-				Code:                "XX000", // "internal_error"
-
-				Message: err.Error(),
-			}).Encode(buf)
-		}
-		if _, err := p.conn.Write(buf); err != nil {
-			err = fmt.Errorf("error writing query response: %w", err)
+			err = writeError(p.conn, "ERROR", err)
 		}
 	}()
 
@@ -181,7 +159,6 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 	buf := (&pgproto3.RowDescription{Fields: fieldDescriptions}).Encode(nil)
 
 	for {
-
 		batch, err := reader.Read()
 		if err == io.EOF {
 			break
@@ -208,7 +185,7 @@ func (p *proxy) processQuery(ctx context.Context, query string, session *session
 		if err != nil {
 			return 0, fmt.Errorf("error writing query response: %w", err)
 		}
-		buf = nil
+		buf = buf[:0] // reset slice without deallocating memory
 	}
 
 	return totalRows, nil
@@ -222,8 +199,7 @@ func (p *proxy) handleStartup() (*session, error) {
 
 	switch startupMessage := startupMessage.(type) {
 	case *pgproto3.StartupMessage:
-		buf := (&pgproto3.AuthenticationCleartextPassword{}).Encode(nil)
-		_, err = p.conn.Write(buf)
+		err := writeMessages(p.conn, &pgproto3.AuthenticationCleartextPassword{})
 		if err != nil {
 			return nil, fmt.Errorf("error sending request for password: %w", err)
 		}
@@ -235,11 +211,12 @@ func (p *proxy) handleStartup() (*session, error) {
 		if !ok {
 			return nil, fmt.Errorf("unexpected message %T", authMessage)
 		}
-		buf = (&pgproto3.AuthenticationOk{}).Encode(nil)
-		buf = (&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"}).Encode(buf)
-		buf = (&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"}).Encode(buf)
-		buf = (&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"}).Encode(buf)
-		_, err = p.conn.Write(buf)
+		err = writeMessages(p.conn,
+			&pgproto3.AuthenticationOk{},
+			&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"},
+			&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"},
+			&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"},
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error sending ready for query: %w", err)
 		}
@@ -289,6 +266,25 @@ func render(column arrow.Array, row int) (string, error) {
 
 func (p *proxy) Close() error {
 	return p.conn.Close()
+}
+
+// writeMessages writes all messages to a single buffer before sending.
+func writeMessages(w io.Writer, msgs ...pgproto3.Message) error {
+	var buf []byte
+	for _, msg := range msgs {
+		buf = msg.Encode(buf)
+	}
+	_, err := w.Write(buf)
+	return err
+}
+
+func writeError(w io.Writer, severity string, err error) error {
+	return writeMessages(w, &pgproto3.ErrorResponse{
+		Severity:            severity,
+		SeverityUnlocalized: severity,
+		Code:                "XX000", // "internal_error"
+		Message:             err.Error(),
+	})
 }
 
 func (cmd *CLI) Run(cli *Context) error {
