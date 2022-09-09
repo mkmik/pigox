@@ -175,6 +175,9 @@ func (p *proxy) handleStartup() (*session, error) {
 	switch startupMessage := startupMessage.(type) {
 	case *pgproto3.StartupMessage:
 		buf := (&pgproto3.AuthenticationOk{}).Encode(nil)
+		buf = (&pgproto3.ParameterStatus{Name: "server_version", Value: "14.2"}).Encode(buf)
+		buf = (&pgproto3.ParameterStatus{Name: "client_encoding", Value: "utf8"}).Encode(buf)
+		buf = (&pgproto3.ParameterStatus{Name: "DateStyle", Value: "ISO"}).Encode(buf)
 		buf = (&pgproto3.ReadyForQuery{TxStatus: 'I'}).Encode(buf)
 		_, err = p.conn.Write(buf)
 		if err != nil {
