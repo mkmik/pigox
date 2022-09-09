@@ -7,7 +7,7 @@ require (
 	github.com/apache/arrow/go/v7 v7.0.1
 	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220802085428-a668f9ff7fba
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
-	github.com/jackc/pgproto3/v2 v2.3.0
+	github.com/jackc/pgproto3/v2 v2.3.1
 	github.com/jackc/pgtype v1.11.0
 )
 
