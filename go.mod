@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/kong v0.6.1
 	github.com/apache/arrow/go/v7 v7.0.1
 	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220905122752-4182ab2269eb
-	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
+	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgproto3/v2 v2.3.2
 	github.com/jackc/pgtype v1.12.0
 )
