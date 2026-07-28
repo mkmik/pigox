@@ -24,5 +24,5 @@ jobs:
     - name: Test
       run: go test -v ./...
 
-    - uses: imjasonh/setup-ko@ace48d793556083a76f1e3e6068850c1f4a369aa # v0.6
+    - uses: imjasonh/setup-ko@61b4d1d396f5b2e7d6bb6fefdce3dc38d1a13445 # v0.10
     - run: ko publish ./
