@@ -3,7 +3,7 @@ module github.com/mkmik/pigox
 go 1.18
 
 require (
-	github.com/alecthomas/kong v0.6.1
+	github.com/alecthomas/kong v0.9.0
 	github.com/apache/arrow/go/v7 v7.0.1
 	github.com/influxdata/influxdb-iox-client-go v0.0.0-20220905122752-4182ab2269eb
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
